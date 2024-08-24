@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.4.1)
 set(CMAKE_C_COMPILER   "/usr/bin/gcc")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++")
-set(CMAKE_CXX_STANDARD 20)
-# TODO: adjust target platform
-set(TARGET x86_64-linux-gnu)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ --target=${TARGET}" )
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funroll-loops -O1" )
 project(backup_tool)
 add_executable(backup_tool src/main.cc src/backup.cc src/restore.cc src/utils.cc)
 target_include_directories(backup_tool PRIVATE src)
