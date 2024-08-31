@@ -98,6 +98,8 @@ void diff_backup(const string& backup_src, const string& backup_home)
         ss >> full_backup_path;
 
         // Copy files
+        #pragma omp parallel num_threads(4)
+        {
         for (const auto &entry : filesystem::recursive_directory_iterator(backupSrc)) {
             const auto &path = entry.path();
             auto relativePath = path.lexically_relative(backupSrc);
@@ -115,18 +117,25 @@ void diff_backup(const string& backup_src, const string& backup_home)
                 );
             }
         }
-
+        }
 
         // Write metadata && identify changes
+        #pragma omp parallel num_threads(4)
+        {
         for (const auto &entry : filesystem::recursive_directory_iterator(backupHome/cur_backup_path)) {
             const auto &path = entry.path().lexically_relative(backupHome/cur_backup_path);
             metaFile << "+ " << path.string() << "\n";
         }
+        }
+        
+        #pragma omp parallel num_threads(4)
+        {
         for (const auto &entry : filesystem::recursive_directory_iterator(backupHome/full_backup_path)) {
             const auto &path = entry.path();
             auto relativePath=path.lexically_relative(backupHome/full_backup_path);
             if( unlikely( !filesystem::exists(backupSrc/relativePath) ))
                 metaFile << "- "  << relativePath.string() << "\n";
+        }
         }
         metaFile.close();
         cout << "Differential backup completed successfully.\n";

@@ -40,6 +40,7 @@ vector<backup_pair> backup_info(filesystem::path& path, bool print)
             return filesystem::last_write_time(p1) < filesystem::last_write_time(p2);
         }
     );
+    
     for(const auto& filename:filenames){
             pathstr = filename.lexically_relative(path).string();
             path_in.clear();

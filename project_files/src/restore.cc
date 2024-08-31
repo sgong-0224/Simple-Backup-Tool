@@ -22,6 +22,8 @@ void copy_restore_data(
     const set<filesystem::path>& deleted
 )
 {
+    #pragma omp parallel num_threads(4)
+    {    
     for (const auto &entry : filesystem::recursive_directory_iterator(restore_src_dir)) {
         const auto &path = entry.path();
         auto relativePath = path.lexically_relative(restore_src_dir);
@@ -31,6 +33,7 @@ void copy_restore_data(
             filesystem::last_write_time(restore_dest_dir/relativePath,
                 filesystem::last_write_time(path));
         }
+    }
     }
 }
 
