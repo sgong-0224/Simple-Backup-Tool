@@ -3,13 +3,12 @@
 #include <iostream>
 #include <string>
 #include <cstring>
-using namespace std;
 
 void usage(){
-    cout << "Usage:\n";
-    cout << "  backup_tool backup -s <src_dir> -d <backup_home_dir>\n";
-    cout << "  backup_tool full_backup -s <src_dir> -d <backup_home_dir>\n";
-    cout << "  backup_tool restore -s <backup_home_dir> -d <target_dir>\n";
+    std::cout << "Usage:\n";
+    std::cout << "  backup_tool backup -s <src_dir> -d <backup_home_dir>\n";
+    std::cout << "  backup_tool full_backup -s <src_dir> -d <backup_home_dir>\n";
+    std::cout << "  backup_tool restore -s <backup_home_dir> -d <target_dir>\n";
 }
 
 int main(int argc, char** argv){

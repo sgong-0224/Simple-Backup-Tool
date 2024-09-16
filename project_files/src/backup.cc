@@ -1,5 +1,6 @@
 #include "backup.h"
-#include "utils.h"
+#include "definition.h"
+#include "delta.h"
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -7,63 +8,62 @@
 #include <iostream>
 #include <string>
 
-using namespace std;
-
-void full_backup(const string& backup_src, const string& backup_home) 
+void full_backup(const std::string& backup_src, const std::string& backup_home) 
 {
     try {
-        filesystem::path backupSrc(backup_src);
-        filesystem::path backupHome(backup_home);
-        if( likely( !filesystem::exists(backupHome) ) )
-            filesystem::create_directories(backupHome);
+        std::filesystem::path backupSrc(backup_src);
+        std::filesystem::path backupHome(backup_home);
+        if( likely( !std::filesystem::exists(backupHome) ) )
+            std::filesystem::create_directories(backupHome);
 
         // Create backup directory & metadata
         size_t cur_backup_idx=find_backup_cnt(backupHome)+1;
-        stringstream ss;
+        std::stringstream ss;
         ss << cur_backup_idx  << "_data";
-        string cur_backup_path;
+        std::string cur_backup_path;
         ss >> cur_backup_path;
-        filesystem::create_directories(backupHome/cur_backup_path);
+        std::filesystem::create_directories(backupHome/cur_backup_path);
         ss.clear();
+        ss.str("");
         ss << cur_backup_idx  << "_metadata-full";
-        string cur_backup_metadata;
+        std::string cur_backup_metadata;
         ss >> cur_backup_metadata;
-        fstream metaFile(backupHome/cur_backup_metadata, ios::out|ios::trunc);
+        std::fstream metaFile(backupHome/cur_backup_metadata, std::ios::out|std::ios::trunc);
 
         // Copy files
-        for (const auto &entry : filesystem::recursive_directory_iterator(backupSrc)) {
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(backupSrc)) {
             const auto &path = entry.path();
             auto relativePath = path.lexically_relative(backupSrc);
-            filesystem::copy( path, backupHome/cur_backup_path/relativePath,
-        filesystem::copy_options::overwrite_existing | filesystem::copy_options::recursive);
+            std::filesystem::copy( path, backupHome/cur_backup_path/relativePath,
+        std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
             // fix metadata
-            filesystem::last_write_time(
+            std::filesystem::last_write_time(
                 backupHome/cur_backup_path/relativePath,
-                filesystem::last_write_time(path)
+                std::filesystem::last_write_time(path)
             );
         }
 
         // Write metadata
-        for (const auto &entry : filesystem::recursive_directory_iterator(backupSrc)) {
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(backupSrc)) {
             const auto &path = entry.path().lexically_relative(backupSrc);
             metaFile << "+ " << path.string() << "\n";
         }
         metaFile.close();
-        cout << "Full backup completed successfully.\n";
-    } catch (const filesystem::filesystem_error &err) {
-        cerr << "Filesystem error: " << err.what() << '\n';
+        std::cout << "Full backup completed successfully.\n";
+    } catch (const std::filesystem::filesystem_error &err) {
+        std::cerr << "Filesystem error: " << err.what() << '\n';
     }
 }
 
-void diff_backup(const string& backup_src, const string& backup_home) 
+void diff_backup(const std::string& backup_src, const std::string& backup_home) 
 {
     try {
-        filesystem::path backupSrc(backup_src);
-        filesystem::path backupHome(backup_home);
+        std::filesystem::path backupSrc(backup_src);
+        std::filesystem::path backupHome(backup_home);
 
         // Create backup directory & metadata
-        if( unlikely( !filesystem::exists(backupHome) ) ){
-            filesystem::create_directories(backupHome);
+        if( unlikely( !std::filesystem::exists(backupHome) ) ){
+            std::filesystem::create_directories(backupHome);
             full_backup(backup_src, backup_home);
             return;
         }
@@ -73,15 +73,16 @@ void diff_backup(const string& backup_src, const string& backup_home)
             return;
         }
         size_t cur_backup_idx=prev_backup_idx+1;
-        stringstream ss;
+        std::stringstream ss;
         ss << cur_backup_idx  << "_data";
-        string cur_backup_path, full_backup_path, cur_backup_metadata;
+        std::string cur_backup_path, full_backup_path, cur_backup_metadata;
         ss >> cur_backup_path;
-        filesystem::create_directories(backupHome/cur_backup_path);
+        std::filesystem::create_directories(backupHome/cur_backup_path);
         ss.clear();
+        ss.str("");
         ss << cur_backup_idx  << "_metadata-diff";
         ss >> cur_backup_metadata;
-        fstream metaFile(backupHome/cur_backup_metadata, ios::out|ios::trunc );
+        std::fstream metaFile(backupHome/cur_backup_metadata, std::ios::out|std::ios::trunc );
         
         // Find base backup
         size_t full_backup_idx=cur_backup_idx;
@@ -97,39 +98,62 @@ void diff_backup(const string& backup_src, const string& backup_home)
         ss << full_backup_idx << "_data";
         ss >> full_backup_path;
 
-        // Copy files
-        for (const auto &entry : filesystem::recursive_directory_iterator(backupSrc)) {
+        // Copy small files
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(backupSrc)) {
             const auto &path = entry.path();
             auto relativePath = path.lexically_relative(backupSrc);
             auto prevPath = backupHome/full_backup_path/relativePath;
             if( unlikely(
-                !filesystem::exists(prevPath)
-            ||  filesystem::last_write_time(path)!=filesystem::last_write_time(prevPath)
+                !std::filesystem::exists(prevPath)
+            ||  std::filesystem::last_write_time(path)!=std::filesystem::last_write_time(prevPath) 
             ) ){
-                filesystem::copy( path, backupHome/cur_backup_path/relativePath,
-        filesystem::copy_options::overwrite_existing | filesystem::copy_options::recursive);
-                // fix metadata
-                filesystem::last_write_time(
-                    backupHome/cur_backup_path/relativePath,
-                filesystem::last_write_time(path)
-                );
+                if( 
+                    std::filesystem::is_regular_file(path) && 
+                    std::filesystem::file_size(path)>>20 >= LARGE_FILE_SIZE_MiB 
+                ){
+                    // large file: create symlink
+                    std::filesystem::create_symlink(path, backupHome/cur_backup_path/relativePath);
+                }else{
+                    std::filesystem::copy( path, backupHome/cur_backup_path/relativePath,
+            std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
+                    // fix metadata
+                    std::filesystem::last_write_time(backupHome/cur_backup_path/relativePath,
+                    std::filesystem::last_write_time(path));
+                }
             }
         }
 
         // Write metadata && identify changes
-        for (const auto &entry : filesystem::recursive_directory_iterator(backupHome/cur_backup_path)) {
+        std::fstream oldfile, newfile, backup_delta;
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(backupHome/cur_backup_path)) {
             const auto &path = entry.path().lexically_relative(backupHome/cur_backup_path);
-            metaFile << "+ " << path.string() << "\n";
+            // TODO: Modified large files: Dummy symlink-> Delta binary
+            if( unlikely(  
+               std::filesystem::is_symlink(backupHome/cur_backup_path/path)
+            ) ){
+                metaFile << "M " << path.string() << "\n";
+                std::filesystem::remove(backupHome/cur_backup_path/path);
+                oldfile.open(backupHome/full_backup_path/path, std::ios::in|std::ios::binary);
+                newfile.open(backupSrc/path, std::ios::in|std::ios::binary);                
+                backup_delta.open(backupHome/cur_backup_path/path, std::ios::out|std::ios::binary);
+                auto delta_structs=diff_stream(oldfile, newfile);
+                oldfile.close();
+                print_diff(delta_structs, metaFile);
+                write_delta(delta_structs, newfile, backup_delta);
+                newfile.close();
+                backup_delta.close();
+            }
+            else
+                metaFile << "+ " << path.string() << "\n";
         }
-        for (const auto &entry : filesystem::recursive_directory_iterator(backupHome/full_backup_path)) {
-            const auto &path = entry.path();
-            auto relativePath=path.lexically_relative(backupHome/full_backup_path);
-            if( unlikely( !filesystem::exists(backupSrc/relativePath) ))
-                metaFile << "- "  << relativePath.string() << "\n";
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(backupHome/full_backup_path)) {
+            const auto &path = entry.path().lexically_relative(backupHome/full_backup_path);
+            if( unlikely( !std::filesystem::exists(backupSrc/path) ))
+                metaFile << "- "  << path.string() << "\n";
         }
         metaFile.close();
-        cout << "Differential backup completed successfully.\n";
-    } catch (const filesystem::filesystem_error &err) {
-        cerr << "Filesystem error: " << err.what() << '\n';
+        std::cout << "Differential backup completed successfully.\n";
+    } catch (const std::filesystem::filesystem_error &err) {
+        std::cerr << "Filesystem error: " << err.what() << '\n';
     }
 }
